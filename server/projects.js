@@ -12,7 +12,6 @@ let cacheTimestamp = Date.now();
 function clearProjectDirectoryCache() {
   projectDirectoryCache.clear();
   cacheTimestamp = Date.now();
-  console.log('🗑️ Project directory cache cleared');
 }
 
 // Load project configuration file
@@ -74,7 +73,7 @@ async function extractProjectDirectory(projectName) {
     return projectDirectoryCache.get(projectName);
   }
   
-  console.log(`🔍 Extracting project directory for: ${projectName}`);
+  // Extract project directory from JSONL sessions
   
   const projectDir = path.join(process.env.HOME, '.claude', 'projects', projectName);
   const cwdCounts = new Map();
@@ -156,7 +155,6 @@ async function extractProjectDirectory(projectName) {
     
     // Cache the result
     projectDirectoryCache.set(projectName, extractedPath);
-    console.log(`💾 Cached project directory: ${projectName} -> ${extractedPath}`);
     
     return extractedPath;
     
@@ -203,7 +201,6 @@ async function getProjects() {
     for (const entry of entries) {
       if (entry.isDirectory()) {
         existingProjects.add(entry.name);
-        const projectPath = path.join(claudeDir, entry.name);
         
         // Extract actual project directory from JSONL sessions
         const actualProjectDir = await extractProjectDirectory(entry.name);
