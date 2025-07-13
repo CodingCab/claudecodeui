@@ -521,7 +521,7 @@ function Sidebar({
             <Input
               value={newProjectPath}
               onChange={(e) => setNewProjectPath(e.target.value)}
-              placeholder="../project-name or /absolute/path"
+              placeholder="../../project-name or /absolute/path"
               className="text-sm focus:ring-2 focus:ring-primary/20"
               autoFocus
               onKeyDown={(e) => {
@@ -537,7 +537,7 @@ function Sidebar({
                 if (e.target.value.trim() && !newProjectPath.trim()) {
                   const repoName = e.target.value.split('/').pop().replace(/\.git$/, '');
                   if (repoName) {
-                    setNewProjectPath(`../${repoName}`);
+                    setNewProjectPath(`../../${repoName}`);
                   }
                 }
               }}
@@ -594,7 +594,7 @@ function Sidebar({
                 <Input
                   value={newProjectPath}
                   onChange={(e) => setNewProjectPath(e.target.value)}
-                  placeholder="../project-name or /absolute/path"
+                  placeholder="../../project-name or /absolute/path"
                   className="text-sm h-10 rounded-md focus:border-primary transition-colors"
                   autoFocus
                   onKeyDown={(e) => {
@@ -610,7 +610,7 @@ function Sidebar({
                     if (e.target.value.trim() && !newProjectPath.trim()) {
                       const repoName = e.target.value.split('/').pop().replace(/\.git$/, '');
                       if (repoName) {
-                        setNewProjectPath(`../${repoName}`);
+                        setNewProjectPath(`../../${repoName}`);
                       }
                     }
                   }}
