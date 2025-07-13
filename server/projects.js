@@ -547,7 +547,7 @@ async function deleteProject(projectName) {
   }
 }
 
-// Add a project manually to the config (without creating folders)
+// Add a project manually to the config (creates folders if they don't exist)
 async function addProjectManually(projectPath, displayName = null) {
   const absolutePath = path.resolve(projectPath);
   
@@ -555,7 +555,17 @@ async function addProjectManually(projectPath, displayName = null) {
     // Check if the path exists
     await fs.access(absolutePath);
   } catch (error) {
-    throw new Error(`Path does not exist: ${absolutePath}`);
+    // If path doesn't exist, create it
+    if (error.code === 'ENOENT') {
+      try {
+        await fs.mkdir(absolutePath, { recursive: true });
+        console.log(`Created directory: ${absolutePath}`);
+      } catch (mkdirError) {
+        throw new Error(`Failed to create directory ${absolutePath}: ${mkdirError.message}`);
+      }
+    } else {
+      throw new Error(`Cannot access path ${absolutePath}: ${error.message}`);
+    }
   }
   
   // Generate project name (encode path for use as directory name)
