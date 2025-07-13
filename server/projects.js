@@ -180,6 +180,11 @@ async function getProjects() {
   const cwd = process.cwd();
   const localProjectsDir = path.resolve(cwd, 'projects');
   
+  // Clean up projects not in ./projects folder in background
+  cleanupNonProjectsFolderProjects().catch(() => {
+    // Ignore cleanup errors - it's a background task
+  });
+  
   // First, get list of actual projects that exist in ./projects folder
   let validProjectPaths = new Set();
   try {
@@ -693,16 +698,14 @@ async function cleanupNonProjectsFolderProjects() {
             const projectPath = path.join(claudeDir, entry.name);
             await fs.rm(projectPath, { recursive: true, force: true });
             removed.push({ name: entry.name, path: actualProjectDir });
-            console.log(`Removed Claude project: ${entry.name} (${actualProjectDir})`);
+            // Removed successfully
           } catch (error) {
             errors.push({ name: entry.name, path: actualProjectDir, error: error.message });
-            console.error(`Failed to remove ${entry.name}:`, error.message);
           }
         }
       }
     }
   } catch (error) {
-    console.error('Error reading Claude projects directory:', error);
     errors.push({ error: error.message });
   }
   
