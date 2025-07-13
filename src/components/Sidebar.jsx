@@ -71,6 +71,7 @@ function Sidebar({
   const [editingSessionName, setEditingSessionName] = useState('');
   const [generatingSummary, setGeneratingSummary] = useState({});
   const [searchFilter, setSearchFilter] = useState('');
+  const [defaultProjectLocation, setDefaultProjectLocation] = useState('../../');
 
   
   // Starred projects state - persisted in localStorage
@@ -132,27 +133,28 @@ function Sidebar({
     }
   }, [projects, isLoading]);
 
-  // Load project sort order from settings
+  // Load project sort order and default location from settings
   useEffect(() => {
-    const loadSortOrder = () => {
+    const loadSettings = () => {
       try {
         const savedSettings = localStorage.getItem('claude-tools-settings');
         if (savedSettings) {
           const settings = JSON.parse(savedSettings);
           setProjectSortOrder(settings.projectSortOrder || 'name');
+          setDefaultProjectLocation(settings.defaultProjectLocation || '../../');
         }
       } catch (error) {
-        console.error('Error loading sort order:', error);
+        console.error('Error loading settings:', error);
       }
     };
 
     // Load initially
-    loadSortOrder();
+    loadSettings();
 
     // Listen for storage changes
     const handleStorageChange = (e) => {
       if (e.key === 'claude-tools-settings') {
-        loadSortOrder();
+        loadSettings();
       }
     };
 
@@ -161,7 +163,7 @@ function Sidebar({
     // Also check periodically when component is focused (for same-tab changes)
     const checkInterval = setInterval(() => {
       if (document.hasFocus()) {
-        loadSortOrder();
+        loadSettings();
       }
     }, 1000);
     
@@ -521,7 +523,7 @@ function Sidebar({
             <Input
               value={newProjectPath}
               onChange={(e) => setNewProjectPath(e.target.value)}
-              placeholder="../../project-name or /absolute/path"
+              placeholder={`${defaultProjectLocation}project-name or /absolute/path`}
               className="text-sm focus:ring-2 focus:ring-primary/20"
               autoFocus
               onKeyDown={(e) => {
@@ -537,7 +539,7 @@ function Sidebar({
                 if (e.target.value.trim() && !newProjectPath.trim()) {
                   const repoName = e.target.value.split('/').pop().replace(/\.git$/, '');
                   if (repoName) {
-                    setNewProjectPath(`../../${repoName}`);
+                    setNewProjectPath(`${defaultProjectLocation}${repoName}`);
                   }
                 }
               }}
@@ -594,7 +596,7 @@ function Sidebar({
                 <Input
                   value={newProjectPath}
                   onChange={(e) => setNewProjectPath(e.target.value)}
-                  placeholder="../../project-name or /absolute/path"
+                  placeholder={`${defaultProjectLocation}project-name or /absolute/path`}
                   className="text-sm h-10 rounded-md focus:border-primary transition-colors"
                   autoFocus
                   onKeyDown={(e) => {
@@ -610,7 +612,7 @@ function Sidebar({
                     if (e.target.value.trim() && !newProjectPath.trim()) {
                       const repoName = e.target.value.split('/').pop().replace(/\.git$/, '');
                       if (repoName) {
-                        setNewProjectPath(`../../${repoName}`);
+                        setNewProjectPath(`${defaultProjectLocation}${repoName}`);
                       }
                     }
                   }}

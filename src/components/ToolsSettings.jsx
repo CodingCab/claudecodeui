@@ -16,6 +16,7 @@ function ToolsSettings({ isOpen, onClose }) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
   const [projectSortOrder, setProjectSortOrder] = useState('name');
+  const [defaultProjectLocation, setDefaultProjectLocation] = useState('../../');
 
   // Common tool patterns
   const commonTools = [
@@ -53,12 +54,14 @@ function ToolsSettings({ isOpen, onClose }) {
         setDisallowedTools(settings.disallowedTools || []);
         setSkipPermissions(settings.skipPermissions || false);
         setProjectSortOrder(settings.projectSortOrder || 'name');
+        setDefaultProjectLocation(settings.defaultProjectLocation || '../../');
       } else {
         // Set defaults
         setAllowedTools([]);
         setDisallowedTools([]);
         setSkipPermissions(false);
         setProjectSortOrder('name');
+        setDefaultProjectLocation('../../');
       }
     } catch (error) {
       console.error('Error loading tool settings:', error);
@@ -67,6 +70,7 @@ function ToolsSettings({ isOpen, onClose }) {
       setDisallowedTools([]);
       setSkipPermissions(false);
       setProjectSortOrder('name');
+      setDefaultProjectLocation('../../');
     }
   };
 
@@ -80,6 +84,7 @@ function ToolsSettings({ isOpen, onClose }) {
         disallowedTools,
         skipPermissions,
         projectSortOrder,
+        defaultProjectLocation,
         lastUpdated: new Date().toISOString()
       };
       
@@ -206,6 +211,36 @@ function ToolsSettings({ isOpen, onClose }) {
                       <option value="name">Alphabetical</option>
                       <option value="date">Recent Activity</option>
                     </select>
+                  </div>
+                </div>
+
+                {/* Default Project Location */}
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <div className="space-y-3">
+                    <div>
+                      <div className="font-medium text-foreground">
+                        Default Project Location
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Default path prefix for new projects and repository clones
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={defaultProjectLocation}
+                        onChange={(e) => setDefaultProjectLocation(e.target.value)}
+                        placeholder="../../"
+                        className="text-sm w-32 h-9 font-mono"
+                        style={{ fontSize: '14px' }}
+                      />
+                      <div className="text-sm text-muted-foreground">project-name</div>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Examples: <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">../../</code> (two levels up), 
+                      <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded mx-1">../</code> (one level up), 
+                      <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">./projects/</code> (subfolder), 
+                      <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded ml-1">/Users/yourname/projects/</code> (absolute path)
+                    </div>
                   </div>
                 </div>
               </div>
