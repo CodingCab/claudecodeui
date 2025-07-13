@@ -519,6 +519,17 @@ function Sidebar({
               Create New Project
             </div>
             <Input
+              value={newProjectPath}
+              onChange={(e) => setNewProjectPath(e.target.value)}
+              placeholder="../project-name or /absolute/path"
+              className="text-sm focus:ring-2 focus:ring-primary/20"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') createNewProject();
+                if (e.key === 'Escape') cancelNewProject();
+              }}
+            />
+            <Input
               value={newRepositoryUrl}
               onChange={(e) => {
                 setNewRepositoryUrl(e.target.value);
@@ -526,26 +537,11 @@ function Sidebar({
                 if (e.target.value.trim() && !newProjectPath.trim()) {
                   const repoName = e.target.value.split('/').pop().replace(/\.git$/, '');
                   if (repoName) {
-                    setNewProjectPath(`./projects/${repoName}`);
+                    setNewProjectPath(`../${repoName}`);
                   }
                 }
               }}
               placeholder="https://github.com/user/repo.git (optional)"
-              className="text-sm focus:ring-2 focus:ring-primary/20"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && e.shiftKey) {
-                  document.querySelector('input[placeholder*="path/to/project"]')?.focus();
-                } else if (e.key === 'Enter') {
-                  createNewProject();
-                }
-                if (e.key === 'Escape') cancelNewProject();
-              }}
-            />
-            <Input
-              value={newProjectPath}
-              onChange={(e) => setNewProjectPath(e.target.value)}
-              placeholder="/path/to/project or relative/path"
               className="text-sm focus:ring-2 focus:ring-primary/20"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') createNewProject();
@@ -596,18 +592,9 @@ function Sidebar({
               
               <div className="space-y-3">
                 <Input
-                  value={newRepositoryUrl}
-                  onChange={(e) => {
-                    setNewRepositoryUrl(e.target.value);
-                    // Auto-generate project path from repository URL
-                    if (e.target.value.trim() && !newProjectPath.trim()) {
-                      const repoName = e.target.value.split('/').pop().replace(/\.git$/, '');
-                      if (repoName) {
-                        setNewProjectPath(`./projects/${repoName}`);
-                      }
-                    }
-                  }}
-                  placeholder="https://github.com/user/repo.git (optional)"
+                  value={newProjectPath}
+                  onChange={(e) => setNewProjectPath(e.target.value)}
+                  placeholder="../project-name or /absolute/path"
                   className="text-sm h-10 rounded-md focus:border-primary transition-colors"
                   autoFocus
                   onKeyDown={(e) => {
@@ -616,9 +603,18 @@ function Sidebar({
                   }}
                 />
                 <Input
-                  value={newProjectPath}
-                  onChange={(e) => setNewProjectPath(e.target.value)}
-                  placeholder="/path/to/project or relative/path"
+                  value={newRepositoryUrl}
+                  onChange={(e) => {
+                    setNewRepositoryUrl(e.target.value);
+                    // Auto-generate project path from repository URL
+                    if (e.target.value.trim() && !newProjectPath.trim()) {
+                      const repoName = e.target.value.split('/').pop().replace(/\.git$/, '');
+                      if (repoName) {
+                        setNewProjectPath(`../${repoName}`);
+                      }
+                    }
+                  }}
+                  placeholder="https://github.com/user/repo.git (optional)"
                   className="text-sm h-10 rounded-md focus:border-primary transition-colors"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') createNewProject();
