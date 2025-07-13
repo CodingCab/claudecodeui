@@ -36,7 +36,8 @@ import pty from 'node-pty';
 import fetch from 'node-fetch';
 import mime from 'mime-types';
 
-import { getProjects, getSessions, getSessionMessages, renameProject, deleteSession, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache, cleanupNonProjectsFolderProjects } from './projects.js';
+import { getProjects, getSessions, getSessionMessages, renameProject, deleteSession, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache, cleanupNonProjectsFolderProjects, getCloneJobStatus, getAllCloneJobs, completeProjectSetup } from './projects.js';
+import backgroundJobManager from './background-jobs.js';
 import { spawnClaude, abortClaudeSession } from './claude-cli.js';
 import gitRoutes from './routes/git.js';
 import authRoutes from './routes/auth.js';
@@ -267,13 +268,69 @@ app.delete('/api/projects/:projectName', authenticateToken, async (req, res) => 
 // Create project endpoint
 app.post('/api/projects/create', authenticateToken, async (req, res) => {
   try {
-    const { path: projectPath, repositoryUrl } = req.body;
+    const { path: projectPath, repositoryUrl, backgroundClone = true } = req.body;
     
     if (!projectPath || !projectPath.trim()) {
       return res.status(400).json({ error: 'Project path is required' });
     }
     
-    const project = await addProjectManually(projectPath.trim(), null, repositoryUrl?.trim());
+    // Setup progress callback for WebSocket updates
+    const onProgress = (jobId, progressData) => {
+      // Broadcast clone progress to all connected clients
+      const message = {
+        type: 'clone_progress',
+        jobId,
+        ...progressData
+      };
+      
+      connectedClients.forEach(client => {
+        if (client.readyState === client.OPEN) {
+          client.send(JSON.stringify(message));
+        }
+      });
+
+      // If clone completed successfully, complete project setup
+      if (progressData.status === 'completed') {
+        const job = getCloneJobStatus(jobId);
+        if (job && job.data) {
+          completeProjectSetup(job.data.targetPath, job.data.displayName)
+            .then(project => {
+              const completeMessage = {
+                type: 'clone_completed',
+                jobId,
+                project
+              };
+              connectedClients.forEach(client => {
+                if (client.readyState === client.OPEN) {
+                  client.send(JSON.stringify(completeMessage));
+                }
+              });
+            })
+            .catch(error => {
+              console.error('Error completing project setup:', error);
+              const errorMessage = {
+                type: 'clone_error',
+                jobId,
+                error: error.message
+              };
+              connectedClients.forEach(client => {
+                if (client.readyState === client.OPEN) {
+                  client.send(JSON.stringify(errorMessage));
+                }
+              });
+            });
+        }
+      }
+    };
+    
+    const project = await addProjectManually(
+      projectPath.trim(), 
+      null, 
+      repositoryUrl?.trim(), 
+      backgroundClone,
+      onProgress
+    );
+    
     res.json({ success: true, project });
   } catch (error) {
     console.error('Error creating project:', error);
@@ -293,6 +350,34 @@ app.post('/api/projects/cleanup', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Error cleaning up projects:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get clone job status
+app.get('/api/clone-jobs/:jobId', authenticateToken, async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const job = getCloneJobStatus(jobId);
+    
+    if (!job) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+    
+    res.json({ job });
+  } catch (error) {
+    console.error('Error getting clone job status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all clone jobs
+app.get('/api/clone-jobs', authenticateToken, async (req, res) => {
+  try {
+    const jobs = getAllCloneJobs();
+    res.json({ jobs });
+  } catch (error) {
+    console.error('Error getting clone jobs:', error);
     res.status(500).json({ error: error.message });
   }
 });

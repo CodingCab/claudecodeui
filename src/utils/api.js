@@ -58,10 +58,10 @@ export const api = {
     authenticatedFetch(`/api/projects/${projectName}`, {
       method: 'DELETE',
     }),
-  createProject: (path, repositoryUrl = '') =>
+  createProject: (path, repositoryUrl = '', backgroundClone = true) =>
     authenticatedFetch('/api/projects/create', {
       method: 'POST',
-      body: JSON.stringify({ path, repositoryUrl }),
+      body: JSON.stringify({ path, repositoryUrl, backgroundClone }),
     }),
   readFile: (projectName, filePath) =>
     authenticatedFetch(`/api/projects/${projectName}/file?filePath=${encodeURIComponent(filePath)}`),
@@ -78,4 +78,8 @@ export const api = {
       body: formData,
       headers: {}, // Let browser set Content-Type for FormData
     }),
+  getCloneJob: (jobId) =>
+    authenticatedFetch(`/api/clone-jobs/${jobId}`),
+  getAllCloneJobs: () =>
+    authenticatedFetch('/api/clone-jobs'),
 };

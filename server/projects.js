@@ -3,6 +3,7 @@ import fsSync from 'fs';
 import path from 'path';
 import readline from 'readline';
 import { spawn } from 'child_process';
+import backgroundJobManager from './background-jobs.js';
 
 // Cache for extracted project directories
 const projectDirectoryCache = new Map();
@@ -607,7 +608,7 @@ async function deleteProject(projectName) {
   }
 }
 
-// Clone a git repository to a specified directory
+// Clone a git repository to a specified directory (legacy synchronous version)
 async function cloneRepository(repositoryUrl, targetPath) {
   return new Promise((resolve, reject) => {
     // Validate repository URL
@@ -657,6 +658,69 @@ async function cloneRepository(repositoryUrl, targetPath) {
       reject(new Error('Git clone operation timed out after 5 minutes'));
     }, 5 * 60 * 1000);
   });
+}
+
+// Start background clone job
+function startBackgroundClone(repositoryUrl, targetPath, displayName, onProgress) {
+  return backgroundJobManager.startCloneJob(repositoryUrl, targetPath, displayName, onProgress);
+}
+
+// Complete project setup after successful background clone
+async function completeProjectSetup(absolutePath, displayName) {
+  // Generate project name (encode path for use as directory name)
+  const projectName = absolutePath.replace(/\//g, '-');
+  
+  // Check if project already exists in config or as a folder
+  const config = await loadProjectConfig();
+  const projectDir = path.join(process.env.HOME, '.claude', 'projects', projectName);
+  
+  try {
+    await fs.access(projectDir);
+    console.warn(`Project directory already exists for path: ${absolutePath}`);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      // Create project directory
+      await fs.mkdir(projectDir, { recursive: true });
+    }
+  }
+  
+  // Add to config as manually added project
+  config[projectName] = {
+    manuallyAdded: true,
+    originalPath: absolutePath
+  };
+  
+  if (displayName) {
+    config[projectName].displayName = displayName;
+  }
+  
+  await saveProjectConfig(config);
+  
+  // Create project folder structure
+  try {
+    await fs.mkdir(projectDir, { recursive: true });
+  } catch (error) {
+    if (error.code !== 'EEXIST') {
+      throw new Error(`Failed to create project directory: ${error.message}`);
+    }
+  }
+  
+  return {
+    name: projectName,
+    path: absolutePath,
+    displayName: displayName || path.basename(absolutePath),
+    status: 'ready'
+  };
+}
+
+// Get background job status
+function getCloneJobStatus(jobId) {
+  return backgroundJobManager.getJob(jobId);
+}
+
+// Get all clone jobs
+function getAllCloneJobs() {
+  return backgroundJobManager.getJobsByType('clone');
 }
 
 // Clean up Claude projects that are not in ./projects folder
@@ -713,7 +777,7 @@ async function cleanupNonProjectsFolderProjects() {
 }
 
 // Add a project manually to the config (creates folders if they don't exist)
-async function addProjectManually(projectPath, displayName = null, repositoryUrl = null) {
+async function addProjectManually(projectPath, displayName = null, repositoryUrl = null, backgroundClone = false, onProgress = null) {
   // Resolve paths properly based on their nature
   let absolutePath;
   
@@ -760,24 +824,41 @@ async function addProjectManually(projectPath, displayName = null, repositoryUrl
   
   // If repository URL is provided, clone the repository
   if (repositoryUrl) {
-    try {
-      console.log(`Cloning repository ${repositoryUrl} to ${absolutePath}`);
-      await cloneRepository(repositoryUrl, absolutePath);
-      console.log(`Successfully cloned repository to ${absolutePath}`);
+    // Auto-generate display name from repository URL if not provided
+    if (!displayName) {
+      const repoName = repositoryUrl.split('/').pop().replace(/\.git$/, '');
+      displayName = repoName;
+    }
+
+    if (backgroundClone) {
+      // Start background clone and return immediately
+      console.log(`Starting background clone of ${repositoryUrl} to ${absolutePath}`);
+      const jobId = startBackgroundClone(repositoryUrl, absolutePath, displayName, onProgress);
       
-      // Auto-generate display name from repository URL if not provided
-      if (!displayName) {
-        const repoName = repositoryUrl.split('/').pop().replace(/\.git$/, '');
-        displayName = repoName;
-      }
-    } catch (cloneError) {
-      // Clean up the directory if clone fails
+      // Return project info with clone job ID
+      const projectName = absolutePath.replace(/\//g, '-');
+      return {
+        name: projectName,
+        path: absolutePath,
+        displayName,
+        status: 'cloning',
+        cloneJobId: jobId
+      };
+    } else {
+      // Synchronous clone (legacy behavior)
       try {
-        await fs.rmdir(absolutePath, { recursive: true });
-      } catch (cleanupError) {
-        console.warn(`Failed to clean up directory after clone failure: ${cleanupError.message}`);
+        console.log(`Cloning repository ${repositoryUrl} to ${absolutePath}`);
+        await cloneRepository(repositoryUrl, absolutePath);
+        console.log(`Successfully cloned repository to ${absolutePath}`);
+      } catch (cloneError) {
+        // Clean up the directory if clone fails
+        try {
+          await fs.rmdir(absolutePath, { recursive: true });
+        } catch (cleanupError) {
+          console.warn(`Failed to clean up directory after clone failure: ${cleanupError.message}`);
+        }
+        throw new Error(`Failed to clone repository: ${cloneError.message}`);
       }
-      throw new Error(`Failed to clone repository: ${cloneError.message}`);
     }
   }
   
@@ -839,5 +920,9 @@ export {
   saveProjectConfig,
   extractProjectDirectory,
   clearProjectDirectoryCache,
-  cleanupNonProjectsFolderProjects
+  cleanupNonProjectsFolderProjects,
+  startBackgroundClone,
+  completeProjectSetup,
+  getCloneJobStatus,
+  getAllCloneJobs
 };

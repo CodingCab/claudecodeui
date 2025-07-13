@@ -4,10 +4,11 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
 
-import { FolderOpen, Folder, Plus, MessageSquare, Clock, ChevronDown, ChevronRight, Edit3, Check, X, Trash2, Settings, FolderPlus, RefreshCw, Sparkles, Edit2, Star, Search } from 'lucide-react';
+import { FolderOpen, Folder, Plus, MessageSquare, Clock, ChevronDown, ChevronRight, Edit3, Check, X, Trash2, Settings, FolderPlus, RefreshCw, Sparkles, Edit2, Star, Search, Download } from 'lucide-react';
 import { cn } from '../lib/utils';
 import ClaudeLogo from './ClaudeLogo';
 import { api } from '../utils/api';
+import { useWebSocket } from '../utils/websocket';
 
 // Move formatTimeAgo outside component to avoid recreation on every render
 const formatTimeAgo = (dateString, currentTime) => {
@@ -71,6 +72,10 @@ function Sidebar({
   const [editingSessionName, setEditingSessionName] = useState('');
   const [generatingSummary, setGeneratingSummary] = useState({});
   const [searchFilter, setSearchFilter] = useState('');
+  const [cloneJobs, setCloneJobs] = useState(new Map()); // Track background clone jobs
+  
+  // WebSocket for clone progress updates
+  const { messages } = useWebSocket();
 
   
   // Starred projects state - persisted in localStorage
@@ -131,6 +136,53 @@ function Sidebar({
       setInitialSessionsLoaded(newLoaded);
     }
   }, [projects, isLoading]);
+
+  // Handle WebSocket messages for clone progress
+  useEffect(() => {
+    if (messages.length > 0) {
+      const latestMessage = messages[messages.length - 1];
+      
+      if (latestMessage.type === 'clone_progress') {
+        setCloneJobs(prev => {
+          const newJobs = new Map(prev);
+          newJobs.set(latestMessage.jobId, {
+            ...latestMessage,
+            timestamp: Date.now()
+          });
+          return newJobs;
+        });
+      } else if (latestMessage.type === 'clone_completed') {
+        setCloneJobs(prev => {
+          const newJobs = new Map(prev);
+          newJobs.delete(latestMessage.jobId);
+          return newJobs;
+        });
+        
+        // Refresh projects to show the new one
+        if (window.refreshProjects) {
+          window.refreshProjects();
+        } else {
+          window.location.reload();
+        }
+      } else if (latestMessage.type === 'clone_error') {
+        setCloneJobs(prev => {
+          const newJobs = new Map(prev);
+          const job = newJobs.get(latestMessage.jobId);
+          if (job) {
+            newJobs.set(latestMessage.jobId, {
+              ...job,
+              status: 'failed',
+              error: latestMessage.error,
+              timestamp: Date.now()
+            });
+          }
+          return newJobs;
+        });
+        
+        alert(`Clone failed: ${latestMessage.error}`);
+      }
+    }
+  }, [messages]);
 
   // Load project sort order from settings
   useEffect(() => {
@@ -350,11 +402,27 @@ function Sidebar({
         setNewProjectPath('');
         setNewRepositoryUrl(localStorage.getItem('lastRepositoryUrl') || '');
         
-        // Refresh projects to show the new one
-        if (window.refreshProjects) {
-          window.refreshProjects();
+        // If project is cloning in background, track the job
+        if (result.project && result.project.status === 'cloning' && result.project.cloneJobId) {
+          setCloneJobs(prev => {
+            const newJobs = new Map(prev);
+            newJobs.set(result.project.cloneJobId, {
+              jobId: result.project.cloneJobId,
+              status: 'running',
+              progress: 0,
+              projectName: result.project.name,
+              displayName: result.project.displayName,
+              timestamp: Date.now()
+            });
+            return newJobs;
+          });
         } else {
-          window.location.reload();
+          // Immediate refresh for non-cloning projects
+          if (window.refreshProjects) {
+            window.refreshProjects();
+          } else {
+            window.location.reload();
+          }
         }
       } else {
         const error = await response.json();
@@ -696,7 +764,41 @@ function Sidebar({
               </p>
             </div>
           ) : (
-            filteredProjects.map((project) => {
+            <>
+              {/* Clone Progress Jobs */}
+              {Array.from(cloneJobs.values()).map((job) => (
+                <div key={job.jobId} className="mx-3 my-1 p-3 bg-blue-50/50 dark:bg-blue-900/10 border border-blue-200/30 dark:border-blue-800/30 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Download className="w-4 h-4 text-blue-600 dark:text-blue-400 animate-pulse" />
+                    <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                      Cloning: {job.displayName || job.projectName}
+                    </span>
+                  </div>
+                  
+                  {job.status === 'running' && (
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-xs text-blue-700 dark:text-blue-300">
+                        <span>Progress</span>
+                        <span>{job.progress || 0}%</span>
+                      </div>
+                      <div className="w-full bg-blue-100 dark:bg-blue-900/20 rounded-full h-1.5">
+                        <div 
+                          className="bg-blue-600 dark:bg-blue-400 h-1.5 rounded-full transition-all duration-300"
+                          style={{ width: `${job.progress || 0}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  
+                  {job.status === 'failed' && (
+                    <div className="text-xs text-red-600 dark:text-red-400 mt-1">
+                      Failed: {job.error}
+                    </div>
+                  )}
+                </div>
+              ))}
+              
+              {filteredProjects.map((project) => {
               const isExpanded = expandedProjects.has(project.name);
               const isSelected = selectedProject?.name === project.name;
               const isStarred = isProjectStarred(project.name);
@@ -1265,7 +1367,8 @@ function Sidebar({
                   )}
                 </div>
               );
-            })
+            })}
+            </>
           )}
         </div>
       </ScrollArea>
