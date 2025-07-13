@@ -535,13 +535,7 @@ function Sidebar({
               value={newRepositoryUrl}
               onChange={(e) => {
                 setNewRepositoryUrl(e.target.value);
-                // Auto-generate project path from repository URL
-                if (e.target.value.trim() && !newProjectPath.trim()) {
-                  const repoName = e.target.value.split('/').pop().replace(/\.git$/, '');
-                  if (repoName) {
-                    setNewProjectPath(repoName);
-                  }
-                }
+                // Let user specify their own project name
               }}
               placeholder="https://github.com/user/repo.git (optional)"
               className="text-sm focus:ring-2 focus:ring-primary/20"
@@ -608,13 +602,7 @@ function Sidebar({
                   value={newRepositoryUrl}
                   onChange={(e) => {
                     setNewRepositoryUrl(e.target.value);
-                    // Auto-generate project path from repository URL
-                    if (e.target.value.trim() && !newProjectPath.trim()) {
-                      const repoName = e.target.value.split('/').pop().replace(/\.git$/, '');
-                      if (repoName) {
-                        setNewProjectPath(repoName);
-                      }
-                    }
+                    // Let user specify their own project name
                   }}
                   placeholder="https://github.com/user/repo.git (optional)"
                   className="text-sm h-10 rounded-md focus:border-primary transition-colors"
