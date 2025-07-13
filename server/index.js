@@ -267,13 +267,13 @@ app.delete('/api/projects/:projectName', authenticateToken, async (req, res) => 
 // Create project endpoint
 app.post('/api/projects/create', authenticateToken, async (req, res) => {
   try {
-    const { path: projectPath } = req.body;
+    const { path: projectPath, repositoryUrl } = req.body;
     
     if (!projectPath || !projectPath.trim()) {
       return res.status(400).json({ error: 'Project path is required' });
     }
     
-    const project = await addProjectManually(projectPath.trim());
+    const project = await addProjectManually(projectPath.trim(), null, repositoryUrl?.trim());
     res.json({ success: true, project });
   } catch (error) {
     console.error('Error creating project:', error);

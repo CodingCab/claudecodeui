@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import fsSync from 'fs';
 import path from 'path';
 import readline from 'readline';
+import { spawn } from 'child_process';
 
 // Cache for extracted project directories
 const projectDirectoryCache = new Map();
@@ -177,6 +178,10 @@ async function getProjects() {
   const projects = [];
   const existingProjects = new Set();
   
+  // Get the current working directory projects folder path
+  const cwd = process.cwd();
+  const localProjectsDir = path.resolve(cwd, 'projects');
+  
   try {
     // First, get existing projects from the file system
     const entries = await fs.readdir(claudeDir, { withFileTypes: true });
@@ -189,16 +194,30 @@ async function getProjects() {
         // Extract actual project directory from JSONL sessions
         const actualProjectDir = await extractProjectDirectory(entry.name);
         
+        // Only include projects that are in the ./projects folder
+        const normalizedActualDir = path.resolve(actualProjectDir);
+        const normalizedProjectsDir = path.resolve(localProjectsDir);
+        
+        if (!normalizedActualDir.startsWith(normalizedProjectsDir)) {
+          console.log(`Skipping project ${entry.name} - not in ./projects folder (${actualProjectDir})`);
+          continue;
+        }
+        
         // Get display name from config or generate one
         const customName = config[entry.name]?.displayName;
         const autoDisplayName = await generateDisplayName(entry.name, actualProjectDir);
-        const fullPath = actualProjectDir;
+        
+        // Remove the projects/ prefix from display name if it exists
+        let displayName = customName || autoDisplayName;
+        if (displayName.startsWith('projects/')) {
+          displayName = displayName.replace('projects/', '');
+        }
         
         const project = {
           name: entry.name,
           path: actualProjectDir,
-          displayName: customName || autoDisplayName,
-          fullPath: fullPath,
+          displayName: displayName,
+          fullPath: actualProjectDir,
           isCustomName: !!customName,
           sessions: []
         };
@@ -237,15 +256,31 @@ async function getProjects() {
         }
       }
       
-              const project = {
-          name: projectName,
-          path: actualProjectDir,
-          displayName: projectConfig.displayName || await generateDisplayName(projectName, actualProjectDir),
-          fullPath: actualProjectDir,
-          isCustomName: !!projectConfig.displayName,
-          isManuallyAdded: true,
-          sessions: []
-        };
+      // Only include manually configured projects that are in the ./projects folder
+      const normalizedActualDir = path.resolve(actualProjectDir);
+      const normalizedProjectsDir = path.resolve(localProjectsDir);
+      
+      if (!normalizedActualDir.startsWith(normalizedProjectsDir)) {
+        console.log(`Skipping manually configured project ${projectName} - not in ./projects folder (${actualProjectDir})`);
+        continue;
+      }
+      
+      // Get display name and remove projects/ prefix if it exists
+      const autoDisplayName = await generateDisplayName(projectName, actualProjectDir);
+      let displayName = projectConfig.displayName || autoDisplayName;
+      if (displayName.startsWith('projects/')) {
+        displayName = displayName.replace('projects/', '');
+      }
+      
+      const project = {
+        name: projectName,
+        path: actualProjectDir,
+        displayName: displayName,
+        fullPath: actualProjectDir,
+        isCustomName: !!projectConfig.displayName,
+        isManuallyAdded: true,
+        sessions: []
+      };
       
       projects.push(project);
     }
@@ -547,13 +582,90 @@ async function deleteProject(projectName) {
   }
 }
 
+// Clone a git repository to a specified directory
+async function cloneRepository(repositoryUrl, targetPath) {
+  return new Promise((resolve, reject) => {
+    // Validate repository URL
+    const gitUrlPattern = /^(https?:\/\/|git@|ssh:\/\/)/i;
+    if (!gitUrlPattern.test(repositoryUrl)) {
+      reject(new Error('Invalid repository URL. Must be a valid git URL (https, ssh, or git protocol).'));
+      return;
+    }
+
+    console.log(`Starting git clone of ${repositoryUrl} to ${targetPath}`);
+    
+    const gitProcess = spawn('git', ['clone', repositoryUrl, '.'], {
+      cwd: targetPath,
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    gitProcess.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    gitProcess.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    gitProcess.on('close', (code) => {
+      if (code === 0) {
+        console.log(`Git clone completed successfully: ${stdout}`);
+        resolve(stdout);
+      } else {
+        const errorMessage = stderr || stdout || `Git clone failed with exit code ${code}`;
+        console.error(`Git clone failed: ${errorMessage}`);
+        reject(new Error(errorMessage));
+      }
+    });
+
+    gitProcess.on('error', (error) => {
+      console.error(`Git clone process error: ${error.message}`);
+      reject(new Error(`Failed to start git clone: ${error.message}`));
+    });
+
+    // Set a timeout for the clone operation (5 minutes)
+    setTimeout(() => {
+      gitProcess.kill();
+      reject(new Error('Git clone operation timed out after 5 minutes'));
+    }, 5 * 60 * 1000);
+  });
+}
+
 // Add a project manually to the config (creates folders if they don't exist)
-async function addProjectManually(projectPath, displayName = null) {
-  const absolutePath = path.resolve(projectPath);
+async function addProjectManually(projectPath, displayName = null, repositoryUrl = null) {
+  // Resolve paths properly based on their nature
+  let absolutePath;
+  
+  // Always create projects in ./projects folder for consistent organization
+  const cwd = process.cwd();
+  const projectsDir = path.resolve(cwd, 'projects');
+  
+  if (path.isAbsolute(projectPath)) {
+    // For absolute paths, extract just the project name and put it in ./projects
+    const projectName = path.basename(projectPath);
+    absolutePath = path.resolve(projectsDir, projectName);
+    console.log(`Converting absolute path '${projectPath}' to projects folder: ${absolutePath}`);
+  } else {
+    // For relative paths, extract project name and put it in ./projects
+    const projectName = path.basename(projectPath);
+    absolutePath = path.resolve(projectsDir, projectName);
+    console.log(`Creating project '${projectName}' in projects folder: ${absolutePath}`);
+  }
   
   try {
     // Check if the path exists
     await fs.access(absolutePath);
+    
+    // If directory exists and repository URL is provided, check if it's empty
+    if (repositoryUrl) {
+      const files = await fs.readdir(absolutePath);
+      if (files.length > 0) {
+        throw new Error(`Directory ${absolutePath} is not empty. Cannot clone repository into existing directory with files.`);
+      }
+    }
   } catch (error) {
     // If path doesn't exist, create it
     if (error.code === 'ENOENT') {
@@ -564,7 +676,30 @@ async function addProjectManually(projectPath, displayName = null) {
         throw new Error(`Failed to create directory ${absolutePath}: ${mkdirError.message}`);
       }
     } else {
-      throw new Error(`Cannot access path ${absolutePath}: ${error.message}`);
+      throw error;
+    }
+  }
+  
+  // If repository URL is provided, clone the repository
+  if (repositoryUrl) {
+    try {
+      console.log(`Cloning repository ${repositoryUrl} to ${absolutePath}`);
+      await cloneRepository(repositoryUrl, absolutePath);
+      console.log(`Successfully cloned repository to ${absolutePath}`);
+      
+      // Auto-generate display name from repository URL if not provided
+      if (!displayName) {
+        const repoName = repositoryUrl.split('/').pop().replace(/\.git$/, '');
+        displayName = repoName;
+      }
+    } catch (cloneError) {
+      // Clean up the directory if clone fails
+      try {
+        await fs.rmdir(absolutePath, { recursive: true });
+      } catch (cleanupError) {
+        console.warn(`Failed to clean up directory after clone failure: ${cleanupError.message}`);
+      }
+      throw new Error(`Failed to clone repository: ${cloneError.message}`);
     }
   }
   

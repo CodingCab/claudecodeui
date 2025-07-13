@@ -58,10 +58,10 @@ export const api = {
     authenticatedFetch(`/api/projects/${projectName}`, {
       method: 'DELETE',
     }),
-  createProject: (path) =>
+  createProject: (path, repositoryUrl = '') =>
     authenticatedFetch('/api/projects/create', {
       method: 'POST',
-      body: JSON.stringify({ path }),
+      body: JSON.stringify({ path, repositoryUrl }),
     }),
   readFile: (projectName, filePath) =>
     authenticatedFetch(`/api/projects/${projectName}/file?filePath=${encodeURIComponent(filePath)}`),

@@ -16,6 +16,7 @@ function ToolsSettings({ isOpen, onClose }) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
   const [projectSortOrder, setProjectSortOrder] = useState('name');
+  const [defaultProjectLocation, setDefaultProjectLocation] = useState('../../');
 
   // Common tool patterns
   const commonTools = [
@@ -53,12 +54,14 @@ function ToolsSettings({ isOpen, onClose }) {
         setDisallowedTools(settings.disallowedTools || []);
         setSkipPermissions(settings.skipPermissions || false);
         setProjectSortOrder(settings.projectSortOrder || 'name');
+        setDefaultProjectLocation(settings.defaultProjectLocation || '../../');
       } else {
         // Set defaults
         setAllowedTools([]);
         setDisallowedTools([]);
         setSkipPermissions(false);
         setProjectSortOrder('name');
+        setDefaultProjectLocation('../../');
       }
     } catch (error) {
       console.error('Error loading tool settings:', error);
@@ -67,6 +70,7 @@ function ToolsSettings({ isOpen, onClose }) {
       setDisallowedTools([]);
       setSkipPermissions(false);
       setProjectSortOrder('name');
+      setDefaultProjectLocation('../../');
     }
   };
 
@@ -80,6 +84,7 @@ function ToolsSettings({ isOpen, onClose }) {
         disallowedTools,
         skipPermissions,
         projectSortOrder,
+        defaultProjectLocation,
         lastUpdated: new Date().toISOString()
       };
       
@@ -206,6 +211,28 @@ function ToolsSettings({ isOpen, onClose }) {
                       <option value="name">Alphabetical</option>
                       <option value="date">Recent Activity</option>
                     </select>
+                  </div>
+                </div>
+
+                {/* Project Organization Info */}
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <div className="space-y-3">
+                    <div>
+                      <div className="font-medium text-foreground">
+                        Project Organization
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        All new projects are automatically organized in the <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">./projects</code> folder
+                      </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      <div>
+                        <strong>Consistent project location:</strong> All projects are created in <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">./projects/project-name</code>
+                      </div>
+                      <div>
+                        This keeps your workspace organized and makes it easy to find all your Claude Code projects.
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

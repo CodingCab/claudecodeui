@@ -57,6 +57,9 @@ function Sidebar({
   const [showNewProject, setShowNewProject] = useState(false);
   const [editingName, setEditingName] = useState('');
   const [newProjectPath, setNewProjectPath] = useState('');
+  const [newRepositoryUrl, setNewRepositoryUrl] = useState(() => {
+    return localStorage.getItem('lastRepositoryUrl') || '';
+  });
   const [creatingProject, setCreatingProject] = useState(false);
   const [loadingSessions, setLoadingSessions] = useState({});
   const [additionalSessions, setAdditionalSessions] = useState({});
@@ -131,7 +134,7 @@ function Sidebar({
 
   // Load project sort order from settings
   useEffect(() => {
-    const loadSortOrder = () => {
+    const loadSettings = () => {
       try {
         const savedSettings = localStorage.getItem('claude-tools-settings');
         if (savedSettings) {
@@ -139,17 +142,17 @@ function Sidebar({
           setProjectSortOrder(settings.projectSortOrder || 'name');
         }
       } catch (error) {
-        console.error('Error loading sort order:', error);
+        console.error('Error loading settings:', error);
       }
     };
 
     // Load initially
-    loadSortOrder();
+    loadSettings();
 
     // Listen for storage changes
     const handleStorageChange = (e) => {
       if (e.key === 'claude-tools-settings') {
-        loadSortOrder();
+        loadSettings();
       }
     };
 
@@ -158,7 +161,7 @@ function Sidebar({
     // Also check periodically when component is focused (for same-tab changes)
     const checkInterval = setInterval(() => {
       if (document.hasFocus()) {
-        loadSortOrder();
+        loadSettings();
       }
     }, 1000);
     
@@ -332,12 +335,20 @@ function Sidebar({
     setCreatingProject(true);
     
     try {
-      const response = await api.createProject(newProjectPath.trim());
+      // Save repository URL to localStorage
+      if (newRepositoryUrl.trim()) {
+        localStorage.setItem('lastRepositoryUrl', newRepositoryUrl.trim());
+      }
+
+      // Always prepend "./projects/" to the project path for consistent organization
+      const projectPath = `./projects/${newProjectPath.trim()}`;
+      const response = await api.createProject(projectPath, newRepositoryUrl.trim());
 
       if (response.ok) {
         const result = await response.json();
         setShowNewProject(false);
         setNewProjectPath('');
+        setNewRepositoryUrl(localStorage.getItem('lastRepositoryUrl') || '');
         
         // Refresh projects to show the new one
         if (window.refreshProjects) {
@@ -360,6 +371,8 @@ function Sidebar({
   const cancelNewProject = () => {
     setShowNewProject(false);
     setNewProjectPath('');
+    // Keep repository URL from localStorage
+    setNewRepositoryUrl(localStorage.getItem('lastRepositoryUrl') || '');
   };
 
   const loadMoreSessions = async (project) => {
@@ -510,9 +523,28 @@ function Sidebar({
             <Input
               value={newProjectPath}
               onChange={(e) => setNewProjectPath(e.target.value)}
-              placeholder="/path/to/project or relative/path"
+              placeholder="project-name"
               className="text-sm focus:ring-2 focus:ring-primary/20"
               autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') createNewProject();
+                if (e.key === 'Escape') cancelNewProject();
+              }}
+            />
+            <Input
+              value={newRepositoryUrl}
+              onChange={(e) => {
+                setNewRepositoryUrl(e.target.value);
+                // Auto-generate project path from repository URL
+                if (e.target.value.trim() && !newProjectPath.trim()) {
+                  const repoName = e.target.value.split('/').pop().replace(/\.git$/, '');
+                  if (repoName) {
+                    setNewProjectPath(repoName);
+                  }
+                }
+              }}
+              placeholder="https://github.com/user/repo.git (optional)"
+              className="text-sm focus:ring-2 focus:ring-primary/20"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') createNewProject();
                 if (e.key === 'Escape') cancelNewProject();
@@ -525,7 +557,7 @@ function Sidebar({
                 disabled={!newProjectPath.trim() || creatingProject}
                 className="flex-1 h-8 text-xs hover:bg-primary/90 transition-colors"
               >
-                {creatingProject ? 'Creating...' : 'Create Project'}
+                {creatingProject ? (newRepositoryUrl.trim() ? 'Cloning...' : 'Creating...') : 'Create Project'}
               </Button>
               <Button
                 size="sm"
@@ -564,9 +596,28 @@ function Sidebar({
                 <Input
                   value={newProjectPath}
                   onChange={(e) => setNewProjectPath(e.target.value)}
-                  placeholder="/path/to/project or relative/path"
+                  placeholder="project-name"
                   className="text-sm h-10 rounded-md focus:border-primary transition-colors"
                   autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') createNewProject();
+                    if (e.key === 'Escape') cancelNewProject();
+                  }}
+                />
+                <Input
+                  value={newRepositoryUrl}
+                  onChange={(e) => {
+                    setNewRepositoryUrl(e.target.value);
+                    // Auto-generate project path from repository URL
+                    if (e.target.value.trim() && !newProjectPath.trim()) {
+                      const repoName = e.target.value.split('/').pop().replace(/\.git$/, '');
+                      if (repoName) {
+                        setNewProjectPath(repoName);
+                      }
+                    }
+                  }}
+                  placeholder="https://github.com/user/repo.git (optional)"
+                  className="text-sm h-10 rounded-md focus:border-primary transition-colors"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') createNewProject();
                     if (e.key === 'Escape') cancelNewProject();
@@ -587,7 +638,7 @@ function Sidebar({
                     disabled={!newProjectPath.trim() || creatingProject}
                     className="flex-1 h-9 text-sm rounded-md bg-primary hover:bg-primary/90 active:scale-95 transition-all"
                   >
-                    {creatingProject ? 'Creating...' : 'Create'}
+                    {creatingProject ? (newRepositoryUrl.trim() ? 'Cloning...' : 'Creating...') : 'Create'}
                   </Button>
                 </div>
               </div>
