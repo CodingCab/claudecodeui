@@ -602,7 +602,19 @@ async function cloneRepository(repositoryUrl, targetPath) {
 
 // Add a project manually to the config (creates folders if they don't exist)
 async function addProjectManually(projectPath, displayName = null, repositoryUrl = null) {
-  const absolutePath = path.resolve(projectPath);
+  // Resolve paths properly based on their nature
+  let absolutePath;
+  
+  if (path.isAbsolute(projectPath)) {
+    // Absolute paths are used as-is
+    absolutePath = projectPath;
+    console.log(`Using absolute path: ${absolutePath}`);
+  } else {
+    // Relative paths should be resolved from user's home directory instead of server directory
+    // This makes more sense for user workflows like ../../my-project
+    absolutePath = path.resolve(process.env.HOME, projectPath);
+    console.log(`Resolving relative path '${projectPath}' from home directory: ${process.env.HOME} -> ${absolutePath}`);
+  }
   
   try {
     // Check if the path exists
