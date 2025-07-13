@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import fsSync from 'fs';
 import path from 'path';
 import readline from 'readline';
+import { spawn } from 'child_process';
 
 // Cache for extracted project directories
 const projectDirectoryCache = new Map();
@@ -547,13 +548,73 @@ async function deleteProject(projectName) {
   }
 }
 
+// Clone a git repository to a specified directory
+async function cloneRepository(repositoryUrl, targetPath) {
+  return new Promise((resolve, reject) => {
+    // Validate repository URL
+    const gitUrlPattern = /^(https?:\/\/|git@|ssh:\/\/)/i;
+    if (!gitUrlPattern.test(repositoryUrl)) {
+      reject(new Error('Invalid repository URL. Must be a valid git URL (https, ssh, or git protocol).'));
+      return;
+    }
+
+    console.log(`Starting git clone of ${repositoryUrl} to ${targetPath}`);
+    
+    const gitProcess = spawn('git', ['clone', repositoryUrl, '.'], {
+      cwd: targetPath,
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    gitProcess.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    gitProcess.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    gitProcess.on('close', (code) => {
+      if (code === 0) {
+        console.log(`Git clone completed successfully: ${stdout}`);
+        resolve(stdout);
+      } else {
+        const errorMessage = stderr || stdout || `Git clone failed with exit code ${code}`;
+        console.error(`Git clone failed: ${errorMessage}`);
+        reject(new Error(errorMessage));
+      }
+    });
+
+    gitProcess.on('error', (error) => {
+      console.error(`Git clone process error: ${error.message}`);
+      reject(new Error(`Failed to start git clone: ${error.message}`));
+    });
+
+    // Set a timeout for the clone operation (5 minutes)
+    setTimeout(() => {
+      gitProcess.kill();
+      reject(new Error('Git clone operation timed out after 5 minutes'));
+    }, 5 * 60 * 1000);
+  });
+}
+
 // Add a project manually to the config (creates folders if they don't exist)
-async function addProjectManually(projectPath, displayName = null) {
+async function addProjectManually(projectPath, displayName = null, repositoryUrl = null) {
   const absolutePath = path.resolve(projectPath);
   
   try {
     // Check if the path exists
     await fs.access(absolutePath);
+    
+    // If directory exists and repository URL is provided, check if it's empty
+    if (repositoryUrl) {
+      const files = await fs.readdir(absolutePath);
+      if (files.length > 0) {
+        throw new Error(`Directory ${absolutePath} is not empty. Cannot clone repository into existing directory with files.`);
+      }
+    }
   } catch (error) {
     // If path doesn't exist, create it
     if (error.code === 'ENOENT') {
@@ -564,7 +625,30 @@ async function addProjectManually(projectPath, displayName = null) {
         throw new Error(`Failed to create directory ${absolutePath}: ${mkdirError.message}`);
       }
     } else {
-      throw new Error(`Cannot access path ${absolutePath}: ${error.message}`);
+      throw error;
+    }
+  }
+  
+  // If repository URL is provided, clone the repository
+  if (repositoryUrl) {
+    try {
+      console.log(`Cloning repository ${repositoryUrl} to ${absolutePath}`);
+      await cloneRepository(repositoryUrl, absolutePath);
+      console.log(`Successfully cloned repository to ${absolutePath}`);
+      
+      // Auto-generate display name from repository URL if not provided
+      if (!displayName) {
+        const repoName = repositoryUrl.split('/').pop().replace(/\.git$/, '');
+        displayName = repoName;
+      }
+    } catch (cloneError) {
+      // Clean up the directory if clone fails
+      try {
+        await fs.rmdir(absolutePath, { recursive: true });
+      } catch (cleanupError) {
+        console.warn(`Failed to clean up directory after clone failure: ${cleanupError.message}`);
+      }
+      throw new Error(`Failed to clone repository: ${cloneError.message}`);
     }
   }
   
