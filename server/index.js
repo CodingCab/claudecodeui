@@ -293,7 +293,7 @@ app.post('/api/projects/create', authenticateToken, async (req, res) => {
       if (progressData.status === 'completed') {
         const job = getCloneJobStatus(jobId);
         if (job && job.data) {
-          completeProjectSetup(job.data.targetPath, job.data.displayName)
+          completeProjectSetup(job.data.targetPath, job.data.displayName, job.data.repositoryUrl)
             .then(project => {
               const completeMessage = {
                 type: 'clone_completed',

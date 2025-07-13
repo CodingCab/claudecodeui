@@ -10,6 +10,50 @@ import ClaudeLogo from './ClaudeLogo';
 import { api } from '../utils/api';
 import { useWebSocket } from '../utils/websocket';
 
+// Helper function to extract folder name from display name
+const getFolderName = (displayName) => {
+  // If displayName contains a path, get the last part (folder name)
+  if (displayName.includes('/')) {
+    return displayName.split('/').pop();
+  }
+  return displayName;
+};
+
+// Helper function to get repository URL display text
+const getRepositoryDisplayText = (repositoryUrl) => {
+  if (!repositoryUrl) return null;
+  
+  // Extract repository name from URL
+  try {
+    // Handle various Git URL formats
+    let repoName = repositoryUrl;
+    
+    // Remove .git extension if present
+    if (repoName.endsWith('.git')) {
+      repoName = repoName.slice(0, -4);
+    }
+    
+    // Extract from GitHub/GitLab style URLs
+    if (repoName.includes('github.com/') || repoName.includes('gitlab.com/')) {
+      const parts = repoName.split('/');
+      const userIndex = parts.findIndex(part => part.includes('github.com') || part.includes('gitlab.com'));
+      if (userIndex >= 0 && userIndex + 2 < parts.length) {
+        return `${parts[userIndex + 1]}/${parts[userIndex + 2]}`;
+      }
+    }
+    
+    // For other URLs, try to extract the last part
+    const urlParts = repoName.split('/');
+    if (urlParts.length >= 2) {
+      return `${urlParts[urlParts.length - 2]}/${urlParts[urlParts.length - 1]}`;
+    }
+    
+    return urlParts[urlParts.length - 1];
+  } catch (error) {
+    return repositoryUrl;
+  }
+};
+
 // Move formatTimeAgo outside component to avoid recreation on every render
 const formatTimeAgo = (dateString, currentTime) => {
   const date = new Date(dateString);
@@ -857,15 +901,18 @@ function Sidebar({
                               ) : (
                                 <>
                                   <h3 className="text-sm font-medium text-foreground truncate">
-                                    {project.displayName}
+                                    {getFolderName(project.displayName)}
                                   </h3>
-                                  <p className="text-xs text-muted-foreground">
-                                    {(() => {
-                                      const sessionCount = getAllSessions(project).length;
-                                      const hasMore = project.sessionMeta?.hasMore !== false;
-                                      const count = hasMore && sessionCount >= 5 ? `${sessionCount}+` : sessionCount;
-                                      return `${count} session${count === 1 ? '' : 's'}`;
-                                    })()}
+                                  <p className="text-xs text-muted-foreground truncate">
+                                    {project.repositoryUrl ? 
+                                      getRepositoryDisplayText(project.repositoryUrl) :
+                                      (() => {
+                                        const sessionCount = getAllSessions(project).length;
+                                        const hasMore = project.sessionMeta?.hasMore !== false;
+                                        const count = hasMore && sessionCount >= 5 ? `${sessionCount}+` : sessionCount;
+                                        return `${count} session${count === 1 ? '' : 's'}`;
+                                      })()
+                                    }
                                   </p>
                                 </>
                               )}
@@ -1002,20 +1049,19 @@ function Sidebar({
                             </div>
                           ) : (
                             <div>
-                              <div className="text-sm font-semibold truncate text-foreground" title={project.displayName}>
-                                {project.displayName}
+                              <div className="text-sm font-semibold truncate text-foreground" title={getFolderName(project.displayName)}>
+                                {getFolderName(project.displayName)}
                               </div>
-                              <div className="text-xs text-muted-foreground">
-                                {(() => {
-                                  const sessionCount = getAllSessions(project).length;
-                                  const hasMore = project.sessionMeta?.hasMore !== false;
-                                  return hasMore && sessionCount >= 5 ? `${sessionCount}+` : sessionCount;
-                                })()}
-                                {project.fullPath !== project.displayName && (
-                                  <span className="ml-1 opacity-60" title={project.fullPath}>
-                                    • {project.fullPath.length > 25 ? '...' + project.fullPath.slice(-22) : project.fullPath}
-                                  </span>
-                                )}
+                              <div className="text-xs text-muted-foreground truncate">
+                                {project.repositoryUrl ? 
+                                  getRepositoryDisplayText(project.repositoryUrl) :
+                                  (() => {
+                                    const sessionCount = getAllSessions(project).length;
+                                    const hasMore = project.sessionMeta?.hasMore !== false;
+                                    const count = hasMore && sessionCount >= 5 ? `${sessionCount}+` : sessionCount;
+                                    return `${count} session${count === 1 ? '' : 's'}`;
+                                  })()
+                                }
                               </div>
                             </div>
                           )}

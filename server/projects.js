@@ -238,6 +238,7 @@ async function getProjects() {
           displayName: displayName,
           fullPath: actualProjectDir,
           isCustomName: !!customName,
+          repositoryUrl: config[entry.name]?.repositoryUrl || null,
           sessions: []
         };
         
@@ -305,6 +306,7 @@ async function getProjects() {
         fullPath: actualProjectDir,
         isCustomName: !!projectConfig.displayName,
         isManuallyAdded: true,
+        repositoryUrl: projectConfig.repositoryUrl || null,
         sessions: []
       };
       
@@ -666,7 +668,7 @@ function startBackgroundClone(repositoryUrl, targetPath, displayName, onProgress
 }
 
 // Complete project setup after successful background clone
-async function completeProjectSetup(absolutePath, displayName) {
+async function completeProjectSetup(absolutePath, displayName, repositoryUrl = null) {
   // Generate project name (encode path for use as directory name)
   const projectName = absolutePath.replace(/\//g, '-');
   
@@ -694,6 +696,10 @@ async function completeProjectSetup(absolutePath, displayName) {
     config[projectName].displayName = displayName;
   }
   
+  if (repositoryUrl) {
+    config[projectName].repositoryUrl = repositoryUrl;
+  }
+  
   await saveProjectConfig(config);
   
   // Create project folder structure
@@ -709,6 +715,7 @@ async function completeProjectSetup(absolutePath, displayName) {
     name: projectName,
     path: absolutePath,
     displayName: displayName || path.basename(absolutePath),
+    repositoryUrl: repositoryUrl || null,
     status: 'ready'
   };
 }
@@ -892,6 +899,10 @@ async function addProjectManually(projectPath, displayName = null, repositoryUrl
     config[projectName].displayName = displayName;
   }
   
+  if (repositoryUrl) {
+    config[projectName].repositoryUrl = repositoryUrl;
+  }
+  
   await saveProjectConfig(config);
   
   
@@ -901,6 +912,7 @@ async function addProjectManually(projectPath, displayName = null, repositoryUrl
     fullPath: absolutePath,
     displayName: displayName || await generateDisplayName(projectName, absolutePath),
     isManuallyAdded: true,
+    repositoryUrl: repositoryUrl || null,
     sessions: []
   };
 }
