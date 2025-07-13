@@ -237,12 +237,12 @@ function ToolsSettings({ isOpen, onClose }) {
                     </div>
                     <div className="text-xs text-muted-foreground space-y-1">
                       <div>
-                        <strong>Relative paths are resolved from your home directory (~)</strong>
+                        <strong>Relative paths are resolved from current working directory</strong>
                       </div>
                       <div>
-                        Examples: <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">../../</code> (two levels up from ~), 
-                        <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded mx-1">../</code> (one level up from ~), 
-                        <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">./projects/</code> (~/projects/), 
+                        Examples: <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">../</code> (one level up from current folder), 
+                        <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded mx-1">../../</code> (two levels up), 
+                        <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">./projects/</code> (projects subfolder), 
                         <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded ml-1">/Users/yourname/projects/</code> (absolute path)
                       </div>
                     </div>

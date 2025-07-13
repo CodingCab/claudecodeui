@@ -610,10 +610,11 @@ async function addProjectManually(projectPath, displayName = null, repositoryUrl
     absolutePath = projectPath;
     console.log(`Using absolute path: ${absolutePath}`);
   } else {
-    // Relative paths should be resolved from user's home directory instead of server directory
-    // This makes more sense for user workflows like ../../my-project
-    absolutePath = path.resolve(process.env.HOME, projectPath);
-    console.log(`Resolving relative path '${projectPath}' from home directory: ${process.env.HOME} -> ${absolutePath}`);
+    // Relative paths should be resolved from current working directory
+    // This matches user expectations when working in a specific directory
+    const cwd = process.cwd();
+    absolutePath = path.resolve(cwd, projectPath);
+    console.log(`Resolving relative path '${projectPath}' from current directory: ${cwd} -> ${absolutePath}`);
   }
   
   try {
