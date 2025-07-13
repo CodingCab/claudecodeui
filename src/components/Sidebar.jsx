@@ -71,7 +71,6 @@ function Sidebar({
   const [editingSessionName, setEditingSessionName] = useState('');
   const [generatingSummary, setGeneratingSummary] = useState({});
   const [searchFilter, setSearchFilter] = useState('');
-  const [defaultProjectLocation, setDefaultProjectLocation] = useState('../../');
 
   
   // Starred projects state - persisted in localStorage
@@ -133,7 +132,7 @@ function Sidebar({
     }
   }, [projects, isLoading]);
 
-  // Load project sort order and default location from settings
+  // Load project sort order from settings
   useEffect(() => {
     const loadSettings = () => {
       try {
@@ -141,7 +140,6 @@ function Sidebar({
         if (savedSettings) {
           const settings = JSON.parse(savedSettings);
           setProjectSortOrder(settings.projectSortOrder || 'name');
-          setDefaultProjectLocation(settings.defaultProjectLocation || '../../');
         }
       } catch (error) {
         console.error('Error loading settings:', error);
@@ -342,7 +340,9 @@ function Sidebar({
         localStorage.setItem('lastRepositoryUrl', newRepositoryUrl.trim());
       }
 
-      const response = await api.createProject(newProjectPath.trim(), newRepositoryUrl.trim());
+      // Always prepend "./projects/" to the project path for consistent organization
+      const projectPath = `./projects/${newProjectPath.trim()}`;
+      const response = await api.createProject(projectPath, newRepositoryUrl.trim());
 
       if (response.ok) {
         const result = await response.json();
@@ -523,7 +523,7 @@ function Sidebar({
             <Input
               value={newProjectPath}
               onChange={(e) => setNewProjectPath(e.target.value)}
-              placeholder={`${defaultProjectLocation}project-name or /absolute/path`}
+              placeholder="project-name"
               className="text-sm focus:ring-2 focus:ring-primary/20"
               autoFocus
               onKeyDown={(e) => {
@@ -539,7 +539,7 @@ function Sidebar({
                 if (e.target.value.trim() && !newProjectPath.trim()) {
                   const repoName = e.target.value.split('/').pop().replace(/\.git$/, '');
                   if (repoName) {
-                    setNewProjectPath(`${defaultProjectLocation}${repoName}`);
+                    setNewProjectPath(repoName);
                   }
                 }
               }}
@@ -596,7 +596,7 @@ function Sidebar({
                 <Input
                   value={newProjectPath}
                   onChange={(e) => setNewProjectPath(e.target.value)}
-                  placeholder={`${defaultProjectLocation}project-name or /absolute/path`}
+                  placeholder="project-name"
                   className="text-sm h-10 rounded-md focus:border-primary transition-colors"
                   autoFocus
                   onKeyDown={(e) => {
@@ -612,7 +612,7 @@ function Sidebar({
                     if (e.target.value.trim() && !newProjectPath.trim()) {
                       const repoName = e.target.value.split('/').pop().replace(/\.git$/, '');
                       if (repoName) {
-                        setNewProjectPath(`${defaultProjectLocation}${repoName}`);
+                        setNewProjectPath(repoName);
                       }
                     }
                   }}

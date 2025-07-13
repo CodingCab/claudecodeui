@@ -214,36 +214,23 @@ function ToolsSettings({ isOpen, onClose }) {
                   </div>
                 </div>
 
-                {/* Default Project Location */}
+                {/* Project Organization Info */}
                 <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                   <div className="space-y-3">
                     <div>
                       <div className="font-medium text-foreground">
-                        Default Project Location
+                        Project Organization
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        Default path prefix for new projects and repository clones
+                        All new projects are automatically organized in the <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">./projects</code> folder
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        value={defaultProjectLocation}
-                        onChange={(e) => setDefaultProjectLocation(e.target.value)}
-                        placeholder="../../"
-                        className="text-sm w-32 h-9 font-mono"
-                        style={{ fontSize: '14px' }}
-                      />
-                      <div className="text-sm text-muted-foreground">project-name</div>
                     </div>
                     <div className="text-xs text-muted-foreground space-y-1">
                       <div>
-                        <strong>Relative paths are resolved from current working directory</strong>
+                        <strong>Consistent project location:</strong> All projects are created in <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">./projects/project-name</code>
                       </div>
                       <div>
-                        Examples: <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">../</code> (one level up from current folder), 
-                        <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded mx-1">../../</code> (two levels up), 
-                        <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">./projects/</code> (projects subfolder), 
-                        <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded ml-1">/Users/yourname/projects/</code> (absolute path)
+                        This keeps your workspace organized and makes it easy to find all your Claude Code projects.
                       </div>
                     </div>
                   </div>

@@ -104,4 +104,9 @@ temp/
 # Database files
 *.db
 *.sqlite
-*.sqlite3 pr1272/
+*.sqlite3
+
+# Generated projects folder
+projects/
+
+pr1272/

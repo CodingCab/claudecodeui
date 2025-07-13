@@ -178,6 +178,10 @@ async function getProjects() {
   const projects = [];
   const existingProjects = new Set();
   
+  // Get the current working directory projects folder path
+  const cwd = process.cwd();
+  const localProjectsDir = path.resolve(cwd, 'projects');
+  
   try {
     // First, get existing projects from the file system
     const entries = await fs.readdir(claudeDir, { withFileTypes: true });
@@ -190,16 +194,30 @@ async function getProjects() {
         // Extract actual project directory from JSONL sessions
         const actualProjectDir = await extractProjectDirectory(entry.name);
         
+        // Only include projects that are in the ./projects folder
+        const normalizedActualDir = path.resolve(actualProjectDir);
+        const normalizedProjectsDir = path.resolve(localProjectsDir);
+        
+        if (!normalizedActualDir.startsWith(normalizedProjectsDir)) {
+          console.log(`Skipping project ${entry.name} - not in ./projects folder (${actualProjectDir})`);
+          continue;
+        }
+        
         // Get display name from config or generate one
         const customName = config[entry.name]?.displayName;
         const autoDisplayName = await generateDisplayName(entry.name, actualProjectDir);
-        const fullPath = actualProjectDir;
+        
+        // Remove the projects/ prefix from display name if it exists
+        let displayName = customName || autoDisplayName;
+        if (displayName.startsWith('projects/')) {
+          displayName = displayName.replace('projects/', '');
+        }
         
         const project = {
           name: entry.name,
           path: actualProjectDir,
-          displayName: customName || autoDisplayName,
-          fullPath: fullPath,
+          displayName: displayName,
+          fullPath: actualProjectDir,
           isCustomName: !!customName,
           sessions: []
         };
@@ -238,15 +256,31 @@ async function getProjects() {
         }
       }
       
-              const project = {
-          name: projectName,
-          path: actualProjectDir,
-          displayName: projectConfig.displayName || await generateDisplayName(projectName, actualProjectDir),
-          fullPath: actualProjectDir,
-          isCustomName: !!projectConfig.displayName,
-          isManuallyAdded: true,
-          sessions: []
-        };
+      // Only include manually configured projects that are in the ./projects folder
+      const normalizedActualDir = path.resolve(actualProjectDir);
+      const normalizedProjectsDir = path.resolve(localProjectsDir);
+      
+      if (!normalizedActualDir.startsWith(normalizedProjectsDir)) {
+        console.log(`Skipping manually configured project ${projectName} - not in ./projects folder (${actualProjectDir})`);
+        continue;
+      }
+      
+      // Get display name and remove projects/ prefix if it exists
+      const autoDisplayName = await generateDisplayName(projectName, actualProjectDir);
+      let displayName = projectConfig.displayName || autoDisplayName;
+      if (displayName.startsWith('projects/')) {
+        displayName = displayName.replace('projects/', '');
+      }
+      
+      const project = {
+        name: projectName,
+        path: actualProjectDir,
+        displayName: displayName,
+        fullPath: actualProjectDir,
+        isCustomName: !!projectConfig.displayName,
+        isManuallyAdded: true,
+        sessions: []
+      };
       
       projects.push(project);
     }
@@ -605,16 +639,20 @@ async function addProjectManually(projectPath, displayName = null, repositoryUrl
   // Resolve paths properly based on their nature
   let absolutePath;
   
+  // Always create projects in ./projects folder for consistent organization
+  const cwd = process.cwd();
+  const projectsDir = path.resolve(cwd, 'projects');
+  
   if (path.isAbsolute(projectPath)) {
-    // Absolute paths are used as-is
-    absolutePath = projectPath;
-    console.log(`Using absolute path: ${absolutePath}`);
+    // For absolute paths, extract just the project name and put it in ./projects
+    const projectName = path.basename(projectPath);
+    absolutePath = path.resolve(projectsDir, projectName);
+    console.log(`Converting absolute path '${projectPath}' to projects folder: ${absolutePath}`);
   } else {
-    // Relative paths should be resolved from current working directory
-    // This matches user expectations when working in a specific directory
-    const cwd = process.cwd();
-    absolutePath = path.resolve(cwd, projectPath);
-    console.log(`Resolving relative path '${projectPath}' from current directory: ${cwd} -> ${absolutePath}`);
+    // For relative paths, extract project name and put it in ./projects
+    const projectName = path.basename(projectPath);
+    absolutePath = path.resolve(projectsDir, projectName);
+    console.log(`Creating project '${projectName}' in projects folder: ${absolutePath}`);
   }
   
   try {
