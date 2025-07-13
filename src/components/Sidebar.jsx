@@ -195,6 +195,13 @@ function Sidebar({
           });
           return newJobs;
         });
+      } else if (latestMessage.type === 'project_created') {
+        // Immediately refresh projects when a new project is created
+        if (window.refreshProjects) {
+          window.refreshProjects();
+        } else {
+          window.location.reload();
+        }
       } else if (latestMessage.type === 'clone_completed') {
         setCloneJobs(prev => {
           const newJobs = new Map(prev);

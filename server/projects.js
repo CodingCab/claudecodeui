@@ -829,48 +829,14 @@ async function addProjectManually(projectPath, displayName = null, repositoryUrl
     }
   }
   
-  // If repository URL is provided, clone the repository
-  if (repositoryUrl) {
-    // Auto-generate display name from repository URL if not provided
-    if (!displayName) {
-      const repoName = repositoryUrl.split('/').pop().replace(/\.git$/, '');
-      displayName = repoName;
-    }
-
-    if (backgroundClone) {
-      // Start background clone and return immediately
-      console.log(`Starting background clone of ${repositoryUrl} to ${absolutePath}`);
-      const jobId = startBackgroundClone(repositoryUrl, absolutePath, displayName, onProgress);
-      
-      // Return project info with clone job ID
-      const projectName = absolutePath.replace(/\//g, '-');
-      return {
-        name: projectName,
-        path: absolutePath,
-        displayName,
-        status: 'cloning',
-        cloneJobId: jobId
-      };
-    } else {
-      // Synchronous clone (legacy behavior)
-      try {
-        console.log(`Cloning repository ${repositoryUrl} to ${absolutePath}`);
-        await cloneRepository(repositoryUrl, absolutePath);
-        console.log(`Successfully cloned repository to ${absolutePath}`);
-      } catch (cloneError) {
-        // Clean up the directory if clone fails
-        try {
-          await fs.rmdir(absolutePath, { recursive: true });
-        } catch (cleanupError) {
-          console.warn(`Failed to clean up directory after clone failure: ${cleanupError.message}`);
-        }
-        throw new Error(`Failed to clone repository: ${cloneError.message}`);
-      }
-    }
-  }
-  
   // Generate project name (encode path for use as directory name)
   const projectName = absolutePath.replace(/\//g, '-');
+  
+  // Auto-generate display name from repository URL if not provided
+  if (repositoryUrl && !displayName) {
+    const repoName = repositoryUrl.split('/').pop().replace(/\.git$/, '');
+    displayName = repoName;
+  }
   
   // Check if project already exists in config or as a folder
   const config = await loadProjectConfig();
@@ -889,6 +855,15 @@ async function addProjectManually(projectPath, displayName = null, repositoryUrl
     throw new Error(`Project already configured for path: ${absolutePath}`);
   }
   
+  // Create project directory in Claude config
+  try {
+    await fs.mkdir(projectDir, { recursive: true });
+  } catch (error) {
+    if (error.code !== 'EEXIST') {
+      throw new Error(`Failed to create project directory: ${error.message}`);
+    }
+  }
+  
   // Add to config as manually added project
   config[projectName] = {
     manuallyAdded: true,
@@ -905,16 +880,51 @@ async function addProjectManually(projectPath, displayName = null, repositoryUrl
   
   await saveProjectConfig(config);
   
-  
-  return {
+  // Prepare the project object to return
+  const projectObj = {
     name: projectName,
     path: absolutePath,
     fullPath: absolutePath,
     displayName: displayName || await generateDisplayName(projectName, absolutePath),
     isManuallyAdded: true,
     repositoryUrl: repositoryUrl || null,
-    sessions: []
+    sessions: [],
+    status: repositoryUrl ? 'cloning' : 'ready'
   };
+  
+  // If repository URL is provided, start clone process
+  if (repositoryUrl) {
+    if (backgroundClone) {
+      // Start background clone
+      console.log(`Starting background clone of ${repositoryUrl} to ${absolutePath}`);
+      const jobId = startBackgroundClone(repositoryUrl, absolutePath, displayName, onProgress);
+      
+      // Add clone job ID to project object
+      projectObj.cloneJobId = jobId;
+    } else {
+      // Synchronous clone (legacy behavior)
+      try {
+        console.log(`Cloning repository ${repositoryUrl} to ${absolutePath}`);
+        await cloneRepository(repositoryUrl, absolutePath);
+        console.log(`Successfully cloned repository to ${absolutePath}`);
+        projectObj.status = 'ready';
+      } catch (cloneError) {
+        // Clean up the directory and config if clone fails
+        try {
+          await fs.rmdir(absolutePath, { recursive: true });
+          await fs.rm(projectDir, { recursive: true, force: true });
+          delete config[projectName];
+          await saveProjectConfig(config);
+        } catch (cleanupError) {
+          console.warn(`Failed to clean up after clone failure: ${cleanupError.message}`);
+        }
+        throw new Error(`Failed to clone repository: ${cloneError.message}`);
+      }
+    }
+  }
+  
+  
+  return projectObj;
 }
 
 

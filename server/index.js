@@ -331,6 +331,18 @@ app.post('/api/projects/create', authenticateToken, async (req, res) => {
       onProgress
     );
     
+    // Immediately broadcast the new project to all connected clients for instant display
+    const projectCreatedMessage = {
+      type: 'project_created',
+      project
+    };
+    
+    connectedClients.forEach(client => {
+      if (client.readyState === client.OPEN) {
+        client.send(JSON.stringify(projectCreatedMessage));
+      }
+    });
+    
     res.json({ success: true, project });
   } catch (error) {
     console.error('Error creating project:', error);
