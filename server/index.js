@@ -36,7 +36,7 @@ import pty from 'node-pty';
 import fetch from 'node-fetch';
 import mime from 'mime-types';
 
-import { getProjects, getSessions, getSessionMessages, renameProject, deleteSession, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache } from './projects.js';
+import { getProjects, getSessions, getSessionMessages, renameProject, deleteSession, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache, cleanupNonProjectsFolderProjects } from './projects.js';
 import { spawnClaude, abortClaudeSession } from './claude-cli.js';
 import gitRoutes from './routes/git.js';
 import authRoutes from './routes/auth.js';
@@ -277,6 +277,22 @@ app.post('/api/projects/create', authenticateToken, async (req, res) => {
     res.json({ success: true, project });
   } catch (error) {
     console.error('Error creating project:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Clean up projects not in ./projects folder
+app.post('/api/projects/cleanup', authenticateToken, async (req, res) => {
+  try {
+    const result = await cleanupNonProjectsFolderProjects();
+    res.json({ 
+      success: true, 
+      removed: result.removed,
+      errors: result.errors,
+      message: `Removed ${result.removed.length} projects, ${result.errors.length} errors`
+    });
+  } catch (error) {
+    console.error('Error cleaning up projects:', error);
     res.status(500).json({ error: error.message });
   }
 });

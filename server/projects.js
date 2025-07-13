@@ -12,7 +12,6 @@ let cacheTimestamp = Date.now();
 function clearProjectDirectoryCache() {
   projectDirectoryCache.clear();
   cacheTimestamp = Date.now();
-  console.log('🗑️ Project directory cache cleared');
 }
 
 // Load project configuration file
@@ -74,7 +73,7 @@ async function extractProjectDirectory(projectName) {
     return projectDirectoryCache.get(projectName);
   }
   
-  console.log(`🔍 Extracting project directory for: ${projectName}`);
+  // Extract project directory from JSONL sessions
   
   const projectDir = path.join(process.env.HOME, '.claude', 'projects', projectName);
   const cwdCounts = new Map();
@@ -156,7 +155,6 @@ async function extractProjectDirectory(projectName) {
     
     // Cache the result
     projectDirectoryCache.set(projectName, extractedPath);
-    console.log(`💾 Cached project directory: ${projectName} -> ${extractedPath}`);
     
     return extractedPath;
     
@@ -182,24 +180,40 @@ async function getProjects() {
   const cwd = process.cwd();
   const localProjectsDir = path.resolve(cwd, 'projects');
   
+  // Clean up projects not in ./projects folder in background
+  cleanupNonProjectsFolderProjects().catch(() => {
+    // Ignore cleanup errors - it's a background task
+  });
+  
+  // First, get list of actual projects that exist in ./projects folder
+  let validProjectPaths = new Set();
   try {
-    // First, get existing projects from the file system
+    const projectEntries = await fs.readdir(localProjectsDir, { withFileTypes: true });
+    for (const entry of projectEntries) {
+      if (entry.isDirectory()) {
+        const fullPath = path.join(localProjectsDir, entry.name);
+        validProjectPaths.add(path.resolve(fullPath));
+      }
+    }
+  } catch (error) {
+    // No ./projects folder found - this is expected on first run
+  }
+  
+  try {
+    // Get existing Claude projects from the file system
     const entries = await fs.readdir(claudeDir, { withFileTypes: true });
     
     for (const entry of entries) {
       if (entry.isDirectory()) {
         existingProjects.add(entry.name);
-        const projectPath = path.join(claudeDir, entry.name);
         
         // Extract actual project directory from JSONL sessions
         const actualProjectDir = await extractProjectDirectory(entry.name);
-        
-        // Only include projects that are in the ./projects folder
         const normalizedActualDir = path.resolve(actualProjectDir);
-        const normalizedProjectsDir = path.resolve(localProjectsDir);
         
-        if (!normalizedActualDir.startsWith(normalizedProjectsDir)) {
-          console.log(`Skipping project ${entry.name} - not in ./projects folder (${actualProjectDir})`);
+        // Only include projects that exist in our ./projects folder
+        if (!validProjectPaths.has(normalizedActualDir)) {
+          // Skip without logging - filtering is working as expected
           continue;
         }
         
@@ -207,11 +221,15 @@ async function getProjects() {
         const customName = config[entry.name]?.displayName;
         const autoDisplayName = await generateDisplayName(entry.name, actualProjectDir);
         
-        // Remove the projects/ prefix from display name if it exists
+        // Remove any existing prefixes for clean display
         let displayName = customName || autoDisplayName;
         if (displayName.startsWith('projects/')) {
           displayName = displayName.replace('projects/', '');
         }
+        if (displayName.startsWith('.../projects/')) {
+          displayName = displayName.replace('.../projects/', '');
+        }
+        // Keep just the clean project name
         
         const project = {
           name: entry.name,
@@ -256,21 +274,28 @@ async function getProjects() {
         }
       }
       
-      // Only include manually configured projects that are in the ./projects folder
-      const normalizedActualDir = path.resolve(actualProjectDir);
-      const normalizedProjectsDir = path.resolve(localProjectsDir);
-      
-      if (!normalizedActualDir.startsWith(normalizedProjectsDir)) {
-        console.log(`Skipping manually configured project ${projectName} - not in ./projects folder (${actualProjectDir})`);
+      // Only include manually configured projects that exist in our ./projects folder
+      if (!actualProjectDir) {
+        // Skip projects without valid directory
         continue;
       }
       
-      // Get display name and remove projects/ prefix if it exists
+      const normalizedActualDir = path.resolve(actualProjectDir);
+      if (!validProjectPaths.has(normalizedActualDir)) {
+        // Skip without logging - filtering is working as expected
+        continue;
+      }
+      
+      // Get display name and remove any existing prefixes for clean display
       const autoDisplayName = await generateDisplayName(projectName, actualProjectDir);
       let displayName = projectConfig.displayName || autoDisplayName;
       if (displayName.startsWith('projects/')) {
         displayName = displayName.replace('projects/', '');
       }
+      if (displayName.startsWith('.../projects/')) {
+        displayName = displayName.replace('.../projects/', '');
+      }
+      // Keep just the clean project name
       
       const project = {
         name: projectName,
@@ -634,6 +659,59 @@ async function cloneRepository(repositoryUrl, targetPath) {
   });
 }
 
+// Clean up Claude projects that are not in ./projects folder
+async function cleanupNonProjectsFolderProjects() {
+  const claudeDir = path.join(process.env.HOME, '.claude', 'projects');
+  const cwd = process.cwd();
+  const localProjectsDir = path.resolve(cwd, 'projects');
+  
+  // Get list of actual projects that exist in ./projects folder
+  let validProjectPaths = new Set();
+  try {
+    const projectEntries = await fs.readdir(localProjectsDir, { withFileTypes: true });
+    for (const entry of projectEntries) {
+      if (entry.isDirectory()) {
+        const fullPath = path.join(localProjectsDir, entry.name);
+        validProjectPaths.add(path.resolve(fullPath));
+      }
+    }
+  } catch (error) {
+    console.log('No ./projects folder found:', error.message);
+    return { removed: [], errors: [] };
+  }
+  
+  const removed = [];
+  const errors = [];
+  
+  try {
+    const entries = await fs.readdir(claudeDir, { withFileTypes: true });
+    
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        // Extract actual project directory from JSONL sessions
+        const actualProjectDir = await extractProjectDirectory(entry.name);
+        const normalizedActualDir = path.resolve(actualProjectDir);
+        
+        // If project is not in ./projects folder, remove it
+        if (!validProjectPaths.has(normalizedActualDir)) {
+          try {
+            const projectPath = path.join(claudeDir, entry.name);
+            await fs.rm(projectPath, { recursive: true, force: true });
+            removed.push({ name: entry.name, path: actualProjectDir });
+            // Removed successfully
+          } catch (error) {
+            errors.push({ name: entry.name, path: actualProjectDir, error: error.message });
+          }
+        }
+      }
+    }
+  } catch (error) {
+    errors.push({ error: error.message });
+  }
+  
+  return { removed, errors };
+}
+
 // Add a project manually to the config (creates folders if they don't exist)
 async function addProjectManually(projectPath, displayName = null, repositoryUrl = null) {
   // Resolve paths properly based on their nature
@@ -760,5 +838,6 @@ export {
   loadProjectConfig,
   saveProjectConfig,
   extractProjectDirectory,
-  clearProjectDirectoryCache
+  clearProjectDirectoryCache,
+  cleanupNonProjectsFolderProjects
 };
