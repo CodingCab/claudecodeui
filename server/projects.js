@@ -193,7 +193,7 @@ async function getProjects() {
       }
     }
   } catch (error) {
-    console.log('No ./projects folder found or error reading it:', error.message);
+    // No ./projects folder found - this is expected on first run
   }
   
   try {
@@ -211,7 +211,7 @@ async function getProjects() {
         
         // Only include projects that exist in our ./projects folder
         if (!validProjectPaths.has(normalizedActualDir)) {
-          console.log(`Skipping project ${entry.name} - not in ./projects folder (${actualProjectDir})`);
+          // Skip without logging - filtering is working as expected
           continue;
         }
         
@@ -273,9 +273,14 @@ async function getProjects() {
       }
       
       // Only include manually configured projects that exist in our ./projects folder
+      if (!actualProjectDir) {
+        // Skip projects without valid directory
+        continue;
+      }
+      
       const normalizedActualDir = path.resolve(actualProjectDir);
       if (!validProjectPaths.has(normalizedActualDir)) {
-        console.log(`Skipping manually configured project ${projectName} - not in ./projects folder (${actualProjectDir})`);
+        // Skip without logging - filtering is working as expected
         continue;
       }
       
